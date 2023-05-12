@@ -5,6 +5,7 @@ from instaloader.exceptions import ConnectionException
 import telegram
 import os
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.service import Service
@@ -22,26 +23,49 @@ class InstaBot:
         self.insta_username = os.getenv("INSTA_USERNAME")
         self.insta_password = os.getenv("INSTA_PASSWORD")
         self.dm_id = os.getenv("INSTA_DM_ID")
-        self.driver = webdriver.Chrome(service=Service("chromedriver.exe"))
+        self.driver = self.initialize_chrome_driver()
         self.chat_id = "@testing_bot_12345"
+
         # Create an Instaloader instance
         self.L = instaloader.Instaloader(filename_pattern='{profile}_reel')
         self.bot_running = True
 
         self.message_format = """
         Details for {}
-        Reel Owner: {}
-        Reel Caption : {}
+        Reel Owner --> https://www.instagram.com/{}/
+        Reel Caption --> {}
         Reel location : {}
 
         Reel tagged_accounts : {}
         """
 
         self.failed_message = """
-        Failed to get details for {}
+        Failed to get details for {}, {}.
         Please Contant Admin or Try again later.
-
         """
+
+    @staticmethod
+    def initialize_chrome_driver():
+
+        # Create Chrome options instance
+        options = Options()
+
+        # Adding argument to disable the AutomationControlled flag
+        options.add_argument("--disable-blink-features=AutomationControlled")
+
+        # Exclude the collection of enable-automation switches
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+
+        # Turn-off userAutomationExtension
+        options.add_experimental_option("useAutomationExtension", False)
+
+        # Setting the driver path and requesting a page
+        driver = webdriver.Chrome(service=Service("chromedriver.exe"), options=options)
+
+        # Changing the property of the navigator value for webdriver to undefined
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+
+        return driver
 
     def stop_bot(self):
         self.bot_running = False
@@ -51,56 +75,68 @@ class InstaBot:
         session, it Creates the session using the details provided and then saves the session for subsequest logins
         It also disables the 'enable notification' pop up and the 'save login info' pop up."""
 
+        # Check for cookies option
+        try:
+            time.sleep(5)
+            allow_cookie = self.driver.find_element(By.XPATH,
+                                               "/html/body/div[2]/div/div/div[2]/div/div/div[1]/div/div[2]/div/div/div/div/div[2]/div/button[1]")
+        except NoSuchElementException:
+            print("did not find accept cookies element")
+            pass
+
+        else:
+            allow_cookie.click()
+
+        # Open the instagram url and try to load the cookie session
         try:
             time.sleep(2)
-            self.driver.execute("get", {'url': 'http://www.instagram.com'})
-            cookies = pickle.load(open("cookies.pkl", "rb"))
+            self.driver.get(self.ig_url)
+            cookies = pickle.load(open("ig_cookies.pkl", "rb"))
 
             for cookie in cookies:
                 self.driver.add_cookie(cookie)
-            self.driver.execute("get", {'url': 'http://www.instagram.com'})
+                print("Loaded cookies...")
 
-        except:
-            # If there is an error Login using the regular method
-
-            self.driver = webdriver.Chrome(service=Service("chromedriver.exe"))
+            time.sleep(5)
             self.driver.get(self.ig_url)
 
+        except FileNotFoundError:
+            # If it fails to find the cookie session, Login using the regular method
+            self.driver.get(self.ig_url)
+
+            # Enter Username and Password and click submit.
+            time.sleep(5)
+            WebDriverWait(self.driver, 2).until(EC.element_to_be_clickable((By.XPATH, '//input[@name="username"]')))
+            self.driver.find_element(By.XPATH, '//input[@name="username"]').send_keys(self.insta_username)
+            self.driver.find_element(By.XPATH, '//input[@name="password"]').send_keys(self.insta_password)
+
+            time.sleep(1)
+            self.driver.find_element(By.XPATH, '//button[@class="_acan _acap _acas _aj1-"]').click()
+
+        # At the popup that asks to save the login info, Click Yes
+        try:
             time.sleep(10)
-            WebDriverWait(self.driver, 20).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "input[name='username']"))).send_keys(self.insta_username)
-            self.driver.find_element(By.CSS_SELECTOR, "input[name='password']").send_keys(self.insta_password)
-            self.driver.find_element(By.CSS_SELECTOR, "button[type='submit'] div").click()
+            print("Searching for option to save login info")
+            not_now = self.driver.find_element(By.XPATH, '//button[@class="_acan _acap _acas _aj1-"]')
+            not_now.click()
+            print("Save login button clicked")
 
             # Save the cookie session id
-            pickle.dump(self.driver.get_cookies(), open("cookies.pkl", "wb"))
-            self.driver.quit()
-
-        # Save Login Info
-        # DO not save login info
-        try:
-            time.sleep(5)
-            print("Searching for option to save login info")
-            not_now = self.driver.find_element(By.XPATH,
-                                               "//div[@class='x1i10hfl xjqpnuy xa49m3k xqeqjp1 x2hbi6w xdl72j9 x2lah0s xe8uvvx "
-                                               "xdj266r x11i5rnm xat24cr x1mh8g0r x2lwn1j xeuugli x1hl2dhg xggy1nq x1ja2u2z x1t137rt "
-                                               "x1q0g3np x1lku1pv x1a2a7pz x6s0dn4 xjyslct x1ejq31n xd10rxx x1sy0etr x17r0tee"
-                                               " x9f619 x1ypdohk x1i0vuye xwhw2v2 xl56j7k x17ydfre x1f6kntn x2b8uid xlyipyv "
-                                               "x87ps6o x14atkfc x1d5wrs8 x972fbf xcfux6l x1qhh985 xm0m39n xm3z3ea "
-                                               "x1x8b98j x131883w x16mih1h xt0psk2 xt7dq6l xexx8yu x4uap5 x18d9i69 xkhd6sd x1n2onr6 xjbqb8w x1n5bzlp x173jzuc x1yc6y37']")
-            not_now.click()
-            print("Save login Not now button clicked")
+            print(self.driver.get_cookies())
+            pickle.dump(self.driver.get_cookies(), open("ig_cookies.pkl", "wb"))
+            print("cookies saved successfully")
 
         except NoSuchElementException:
             print("Did not find save login button")
             pass
 
-        # Disbale option to enable notification
+        # Disable option to enable notification
         try:
             print("Checking for Enable Notification button")
-            time.sleep(5)
+            time.sleep(7)
             notif_not_now = self.driver.find_element(By.XPATH, "//button[@class='_a9-- _a9_1']")
             notif_not_now.click()
+            print("Clicked Enable Notification button")
 
         except NoSuchElementException:
             print("Did not find Enable Notification button")
@@ -121,7 +157,9 @@ class InstaBot:
             post = instaloader.Post.from_shortcode(self.L.context, shortcode)
         except instaloader.exceptions.ConnectionException:
             print(f"Failed to download media for {reel_url}")
-            return
+            bot.send_message(chat_id=self.chat_id,
+                             text=self.failed_message.format(reel_url, "Connection Error"))
+            return False
 
         # Download the post
         try:
@@ -130,18 +168,23 @@ class InstaBot:
 
         except ConnectionException:
             print("Failed To download IG Reel for {reel_url}. An Error is stopping you from doing so.")
+            bot.send_message(chat_id=self.chat_id,
+                             text=self.failed_message.format(reel_url, "Connection Error"))
 
         # Get the downloaded file path
         media_file_path = f"#downloads/{post.owner_username}_reel.mp4"
 
         # Check if the media file exists
         if not os.path.exists(media_file_path):
+
             print(f"Failed to download media for {reel_url}")
-            return
+            bot.send_message(chat_id=self.chat_id,
+                             text=self.failed_message.format(reel_url, "Failed to download media" ))
+            return False
 
         # Send the media file to the Telegram group chat
         print("Sending media to Telegram. Please wait...")
-        bot = telegram.Bot(token=telegram_token)
+
         bot.send_video(chat_id=self.chat_id, video=open(media_file_path, 'rb'),
                        caption=self.message_format.format(reel_url,
                                                           post.owner_username,
@@ -160,19 +203,31 @@ class InstaBot:
 
         print(f"Media for {reel_url} sent to Telegram successfully!")
 
-    def interact_with_instagram(self):
+        return True
+
+    def interact_with_instagram(self, current_notif_count=0, dm_id="https://www.instagram.com/direct/t/340282366841710300949128137536014401524"):
         """This Function is called once the bot has logged into the acount and has been able to cancel all popups
         The bot then continually checks to see if the Notification button changes and once it does. The bot immediately
-        opens the required DM and then downloads the latest reel sent to  it """
+        opens the required DM and then downloads the latest reel sent to  it
+        :param int current_notif_count: How many Notifications do you currently have in the ig account
+        :param str dm_id: The url of the senders dm when already logged in. To get this login to your ig account using the
+        web and open the dm of the account sending the reels and copy the url on the webpage
+
+        """
         # Click on Messaging option
 
         # Wait till i get a notification
-        while True:
+        while self.bot_running:
             try:
                 time.sleep(3)
                 # Checks if the Notification button has gotten an extra notification
-                new_notification = self.driver.find_element(By.XPATH,
-                                                            '//a[@aria-label="Direct messaging - 4 new notifications link"]')
+
+                if current_notif_count == 0:
+                    new_notif_xpath = f'//a[@aria-label="Direct messaging - {current_notif_count + 1} new notification link"]'
+                else:
+                    new_notif_xpath = f'//a[@aria-label="Direct messaging - {current_notif_count + 1} new notifications link"]'
+
+                new_notification = self.driver.find_element(By.XPATH, new_notif_xpath)
 
                 # Once there is a notification, open the DM and get the latest reel.
                 self.driver.get(self.dm_id)

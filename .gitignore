@@ -5,3 +5,5 @@ venv
 *.session
 *.session-journal
 *.pkl
+*__pycache__/*
+*.idea/*
