@@ -9,12 +9,18 @@ app = Flask(__name__)
 token = os.getenv('FACEBOOK_TOKEN')
 
 
-@app.route('/', methods=['POST'])
+@app.route('/', methods=['GET', 'POST'])
 def handle_webhook():
-    data = request.get_json()
-    # Print the data received from the webhook
-    print(data)
-    return jsonify({'status': 'success'})
+
+    if request.method == 'POST':
+        data = request.get_json()
+        # Print the data received from the webhook
+        print(data)
+        return jsonify({'status': 'success'})
+
+    # Parse the challenge parameter from the request and return it as a JSON object
+    challenge = request.args.get('hub.challenge')
+    return jsonify({'challenge': challenge})
 
 
 if __name__ == '__main__':
