@@ -10,6 +10,8 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.wait import WebDriverWait
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service as ChromeService
 from dotenv import load_dotenv
 import pickle
 
@@ -59,8 +61,11 @@ class InstaBot:
         # Turn-off userAutomationExtension
         options.add_experimental_option("useAutomationExtension", False)
 
+        # Run in the headless browser
+        options.headless = True
+
         # Setting the driver path and requesting a page
-        driver = webdriver.Chrome(service=Service("chromedriver.exe"), options=options)
+        driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
 
         # Changing the property of the navigator value for webdriver to undefined
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
@@ -75,13 +80,16 @@ class InstaBot:
         session, it Creates the session using the details provided and then saves the session for subsequest logins
         It also disables the 'enable notification' pop up and the 'save login info' pop up."""
 
+        self.driver.get(self.ig_url)
+        print("loaded Instagram site")
         # Check for cookies option
         try:
             time.sleep(5)
+            print("searching for cookies page")
             allow_cookie = self.driver.find_element(By.XPATH,
                                                "/html/body/div[2]/div/div/div[2]/div/div/div[1]/div/div[2]/div/div/div/div/div[2]/div/button[1]")
         except NoSuchElementException:
-            print("did not find accept cookies element")
+            print("Did not find accept cookies element")
             pass
 
         else:
