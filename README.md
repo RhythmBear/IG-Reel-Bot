@@ -23,6 +23,9 @@ Before running the script:
 
   INSTA_DM_ID=https://www.instagram.com/direct/t/340282366841710300949128137536014401524
   
+  One key thing to note is that the second instagram should only be recieving messages from Account 1. Since it's built for the script. Every other notification should be deleted beofre running it. 
+  The bot checks to see it there is a new notification and then downloads the media associated with the latest reel sent to it. 
+  
 ### For the Telegram section
 - Create a bot and get the token 
 - Create a Public Telegram channel and add the Bot to that channel 
