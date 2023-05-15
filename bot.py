@@ -1,7 +1,7 @@
 import time
 from selenium import webdriver
 import instaloader
-from instaloader.exceptions import ConnectionException
+from instaloader.exceptions import ConnectionException, BadResponseException
 import telegram
 import os
 from selenium.webdriver.support import expected_conditions as EC
@@ -14,6 +14,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service as ChromeService
 from dotenv import load_dotenv
 import pickle
+import asyncio
 
 load_dotenv()
 
@@ -26,7 +27,7 @@ class InstaBot:
         self.insta_password = os.getenv("INSTA_PASSWORD")
         self.dm_id = os.getenv("INSTA_DM_ID")
         self.driver = self.initialize_chrome_driver()
-        self.chat_id = "@testing_bot_12345"
+        self.chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
         # Create an Instaloader instance
         self.L = instaloader.Instaloader(filename_pattern='{profile}_reel')
@@ -103,7 +104,7 @@ class InstaBot:
 
             for cookie in cookies:
                 self.driver.add_cookie(cookie)
-                print("Loaded cookies...")
+            print("Loaded cookies from previous session...")
 
             time.sleep(5)
             self.driver.get(self.ig_url)
@@ -163,21 +164,22 @@ class InstaBot:
         # Get the post from Instagram using the shortcode
         try:
             post = instaloader.Post.from_shortcode(self.L.context, shortcode)
-        except instaloader.exceptions.ConnectionException:
+        except ConnectionException or BadResponseException:
             print(f"Failed to download media for {reel_url}")
-            bot.send_message(chat_id=self.chat_id,
-                             text=self.failed_message.format(reel_url, "Connection Error"))
+            asyncio.run(bot.send_message(chat_id=self.chat_id,
+                             text=self.failed_message.format(reel_url, "Reel Cannot be downloaded Error")))
             return False
 
         # Download the post
         try:
             print("Downloading media. Please wait...")
             self.L.download_post(post, target='#downloads')
+            time.sleep(10)
 
         except ConnectionException:
-            print("Failed To download IG Reel for {reel_url}. An Error is stopping you from doing so.")
-            bot.send_message(chat_id=self.chat_id,
-                             text=self.failed_message.format(reel_url, "Connection Error"))
+            print(f"Failed To download IG Reel for {reel_url}. An Error is stopping you from doing so.")
+            asyncio.run(bot.send_message(chat_id=self.chat_id,
+                                         text=self.failed_message.format(reel_url, "Connection Error")))
 
         # Get the downloaded file path
         media_file_path = f"#downloads/{post.owner_username}_reel.mp4"
@@ -193,12 +195,12 @@ class InstaBot:
         # Send the media file to the Telegram group chat
         print("Sending media to Telegram. Please wait...")
 
-        bot.send_video(chat_id=self.chat_id, video=open(media_file_path, 'rb'),
+        asyncio.run(bot.send_video(chat_id=self.chat_id, video=open(media_file_path, 'rb'),
                        caption=self.message_format.format(reel_url,
                                                           post.owner_username,
                                                           post.caption,
                                                           post.location,
-                                                          post.tagged_users))
+                                                          post.tagged_users)))
 
         # Delete the downloaded media file
         dir_path = "#downloads/"
@@ -225,7 +227,10 @@ class InstaBot:
         # Click on Messaging option
 
         # Wait till i get a notification
+
         while self.bot_running:
+
+            print("Waiting for message.")
             try:
                 time.sleep(3)
                 # Checks if the Notification button has gotten an extra notification
@@ -238,14 +243,16 @@ class InstaBot:
                 new_notification = self.driver.find_element(By.XPATH, new_notif_xpath)
 
                 # Once there is a notification, open the DM and get the latest reel.
+                print("notification Received...")
+
                 self.driver.get(self.dm_id)
                 time.sleep(2)
 
                 # Fetch the Reels and get the link for the most recent one.
-                print("Fetching Reels...")
+                print("Fetching recent message...")
                 time.sleep(3)
                 reels = self.driver.find_elements(By.XPATH, "//div[@class='_acfj']")
-                print(reels)
+                # print(reels)
 
                 most_recent_reel = reels[-1]
                 # click on the reel
@@ -256,11 +263,21 @@ class InstaBot:
                 print(reel_url)
 
                 # Replace the /p/ with /reel/n the url
+
                 mod_reel_url = reel_url.replace('www.instagram.com/p/', 'www.instagram.com/reel/')
                 print(mod_reel_url)
 
                 # Send the media to telegram
-                self.send_instagram_reel_to_telegram_group(mod_reel_url)
+                success = self.send_instagram_reel_to_telegram_group(mod_reel_url)
+                trials = 2
+                while not success and trials <= 3:
+                    print(f"Attempt {trials} at trying to Download media for {mod_reel_url}")
+                    result = self.send_instagram_reel_to_telegram_group(mod_reel_url)
+                    if result:
+                        success = True
+                    trials += 1
+
+
                 self.driver.get(self.ig_url)
                 time.sleep(2)
 
