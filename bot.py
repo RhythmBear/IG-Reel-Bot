@@ -229,8 +229,7 @@ class InstaBot:
         # Wait till i get a notification
 
         while self.bot_running:
-
-            print("Waiting for message.")
+            
             try:
                 time.sleep(3)
                 # Checks if the Notification button has gotten an extra notification
